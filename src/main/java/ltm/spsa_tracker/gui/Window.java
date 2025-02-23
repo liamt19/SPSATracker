@@ -19,6 +19,8 @@ import java.awt.event.ItemEvent;
 import java.awt.event.ItemListener;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.nio.file.FileSystems;
+import java.nio.file.Path;
 import java.util.Properties;
 import java.awt.event.ActionEvent;
 import javax.swing.JScrollPane;
@@ -158,6 +160,10 @@ public class Window {
 	JMenuItem menuScrapeButton = new JMenuItem("Scrape now");
 	menuScrapeButton.addActionListener(new ScrapeAction());
 	actionMenu.add(menuScrapeButton);
+	
+	JMenuItem menuGraphButton = new JMenuItem("Open graph");
+	menuGraphButton.addActionListener(new GraphAction());
+	actionMenu.add(menuGraphButton);
 
 	tryLoadDefaults();
 	
@@ -219,6 +225,12 @@ public class Window {
     class ScrapeAction implements ActionListener {
 	public void actionPerformed(ActionEvent e) {
 	    doScrape();
+	}
+    }
+    
+    class GraphAction implements ActionListener {
+	public void actionPerformed(ActionEvent e) {
+	    doGraph();
 	}
     }
 
@@ -287,6 +299,22 @@ public class Window {
 	}
 
 	model.addRow(paramSet.toVector());
+    }
+    
+    private void doGraph() {
+	String cwd = FileSystems.getDefault().getPath("").toAbsolutePath().toString();
+	String instance = getSelectedURL();
+	instance = instance.substring(instance.lastIndexOf("/"));
+	String testFolder = Path.of(cwd, ParameterHandler.SAVE_FOLDER, instance).toString();
+	String testId = String.valueOf(getSelectedTestID());
+	
+	ProcessBuilder builder = new ProcessBuilder("python", "graph_csv.py", "--test-folder", testFolder, "--test-id", testId, "--treat-first-iter-zero");
+	System.out.println(builder.command().toString());
+	try {
+	    Process proc = builder.start();
+	} catch (IOException e) {
+	    e.printStackTrace();
+	}
     }
 
     private void resizeColumnWidth(JTable table) {

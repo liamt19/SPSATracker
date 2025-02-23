@@ -20,20 +20,22 @@ import java.util.List;
 
 public class ParameterHandler {
 
+    public static final String SAVE_FOLDER = "saved";
+    
     public static List<ParameterSet> LoadFromFile(String instanceURL, int testID) {
 	List<ParameterSet> paramList = new ArrayList<ParameterSet>();
 
 	String cwd = FileSystems.getDefault().getPath("").toAbsolutePath().toString();
-	String filePath = cwd + instanceURL.substring(instanceURL.lastIndexOf("/")) + "/";
+	String subfolder = instanceURL.substring(instanceURL.lastIndexOf("/"));
+	String folderPath = Paths.get(cwd, SAVE_FOLDER, subfolder).toString();
 	String fileName = testID + ".csv";
-
+	String filePath = Paths.get(folderPath, fileName).toString();
+	
 	try {
-	    Files.createDirectories(Paths.get(filePath));
+	    Files.createDirectories(Paths.get(folderPath));
 	} catch (IOException e) {
 	    e.printStackTrace();
 	}
-
-	filePath += fileName;
 
 	try (BufferedReader br = new BufferedReader(new FileReader(filePath))) {
 
@@ -61,17 +63,17 @@ public class ParameterHandler {
     public static void SaveToFile(String instanceURL, int testID, ParameterSet paramSet) {
 
 	String cwd = FileSystems.getDefault().getPath("").toAbsolutePath().toString();
-	String folderPath = cwd + instanceURL.substring(instanceURL.lastIndexOf("/")) + "/";
+	String subfolder = instanceURL.substring(instanceURL.lastIndexOf("/"));
+	String folderPath = Paths.get(cwd, SAVE_FOLDER, subfolder).toString();
 	String fileName = testID + ".csv";
-
+	String filePath = Paths.get(folderPath, fileName).toString();
+	String stepPath = Paths.get(folderPath, testID + ".info.csv").toString();;
+	
 	try {
 	    Files.createDirectories(Paths.get(folderPath));
 	} catch (IOException e) {
 	    e.printStackTrace();
 	}
-
-	String filePath = folderPath + fileName;
-	String stepPath = folderPath + testID + ".step.csv";
 	
 	if (!fileExists(filePath)) {
 	    writeFileHeaders(filePath, paramSet);
@@ -86,6 +88,9 @@ public class ParameterHandler {
 	    handleExistingFile(stepPath, paramSet);
 	}
 
+	//SQLHandler.createParameterListTable(subfolder, "Test" + testID, paramSet);
+	//SQLHandler.insertSingleParameterSetIteration(subfolder, "Test" + testID, paramSet);
+	
 	int lastIteration = getLastSavedIteration(filePath);
 	if (lastIteration == paramSet.iteration()) {
 	    System.out.println("File already has iteration " + lastIteration);
@@ -157,26 +162,21 @@ public class ParameterHandler {
     
     private static void writeStepSize(String filePath, ParameterSet paramSet) {
 	try (BufferedWriter writer = new BufferedWriter(new FileWriter(filePath))) {
-	    writer.write(paramSet.getCSVHeaders());
+	    writer.write("name,start,step");
 	    writer.newLine();
 	    
 	    var paramList = paramSet.parameters();
 	    for (int i = 0; i < paramList.size(); i++) {
 		Parameter param = paramList.get(i);
 		
-		Float step = param.C_end();
-		if (step == null) {
-		    System.out.println("Step for parameter " + param.name() + " was null!");
-		    step = (param.current() / 20);
-		}
-		
-		writer.write(Float.toString(step));
-		if (i != paramList.size() - 1) {
-		    writer.write(",");
-		}
+		writer.write(param.name());
+		writer.write(",");
+		writer.write(Float.toString(param.start()));
+		writer.write(",");
+		writer.write(Float.toString(param.C_end()));
+		writer.newLine();
 	    }
 	    
-	    writer.newLine();
 	} catch (IOException e) {
 	    System.err.println("Failed writing: " + e.getMessage());
 	}

@@ -156,6 +156,8 @@ public class Window {
 	menuScrapeButton.addActionListener(new ScrapeAction());
 	actionMenu.add(menuScrapeButton);
 
+	comboBoxURL.setSelectedIndex(2);
+	spinnerTestID.setValue(8047);
 	lastParameterSet = new ParameterSet(null, -1);
 	reinitializeScraper();
     }

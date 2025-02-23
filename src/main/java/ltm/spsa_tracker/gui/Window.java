@@ -17,6 +17,9 @@ import ltm.spsa_tracker.backend.*;
 import java.awt.event.ActionListener;
 import java.awt.event.ItemEvent;
 import java.awt.event.ItemListener;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.util.Properties;
 import java.awt.event.ActionEvent;
 import javax.swing.JScrollPane;
 import javax.swing.ScrollPaneConstants;
@@ -156,10 +159,34 @@ public class Window {
 	menuScrapeButton.addActionListener(new ScrapeAction());
 	actionMenu.add(menuScrapeButton);
 
-	comboBoxURL.setSelectedIndex(2);
-	spinnerTestID.setValue(8047);
+	tryLoadDefaults();
+	
 	lastParameterSet = new ParameterSet(null, -1);
 	reinitializeScraper();
+    }
+    
+    private void tryLoadDefaults() {
+	Properties prop = new Properties();
+        try (FileInputStream input = new FileInputStream("defaults.cfg")) {
+            prop.load(input);
+            String url = prop.getProperty("instance.url");
+            String id = prop.getProperty("instance.testid");
+            
+            for (int i = 0; i < comboBoxURL.getItemCount(); i++) {
+		Object o = comboBoxURL.getItemAt(i);
+		if (o.toString().equals(url)) {
+		    comboBoxURL.setSelectedIndex(i);
+		    break;
+		}
+	    }
+            
+            if (id != null) {
+        	spinnerTestID.setValue(Integer.parseInt(id));
+            }
+            
+        } catch (NumberFormatException | IOException ex) {
+            ex.printStackTrace();
+        }
     }
 
     private void reinitializeScraper() {

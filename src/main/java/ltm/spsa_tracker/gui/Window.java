@@ -5,9 +5,11 @@ import java.awt.EventQueue;
 import javax.swing.JFrame;
 import javax.swing.JMenu;
 import javax.swing.JTable;
+import javax.swing.RowSorter;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.TableCellRenderer;
 import javax.swing.table.TableColumnModel;
+import javax.swing.table.TableRowSorter;
 import javax.swing.text.DefaultFormatter;
 
 import java.awt.Component;
@@ -18,13 +20,17 @@ import java.awt.event.ActionListener;
 import java.awt.event.ItemEvent;
 import java.awt.event.ItemListener;
 import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.file.FileSystems;
 import java.nio.file.Path;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Properties;
 import java.awt.event.ActionEvent;
 import javax.swing.JScrollPane;
 import javax.swing.ScrollPaneConstants;
+import javax.swing.SortOrder;
 import javax.swing.SpinnerModel;
 import javax.swing.SpinnerNumberModel;
 import javax.swing.Timer;
@@ -32,7 +38,9 @@ import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
+import javax.swing.JScrollBar;
 import javax.swing.SpringLayout;
+import javax.swing.SwingUtilities;
 import javax.swing.JComboBox;
 import javax.swing.JSpinner;
 import javax.swing.JSpinner.NumberEditor;
@@ -44,16 +52,24 @@ public class Window {
 
 	private JFrame frmSpsaTracker;
 	private JTable table;
+	private TableRowSorter<?> sorter;
 	private JScrollPane scrollPane;
 	private JComboBox comboBoxURL;
 	private JSpinner spinnerTestID;
+	private JSpinner spinnerDelay;
 	private JMenuBar menuBar;
 
 	private Timer scrapeTimer;
 	public Scraper scraper;
 
-	private final int SCRAPE_DELAY = 10000;
-
+	private final int SCRAPE_DELAY = 5000;
+	
+	private final String CFG_FILE = "last.cfg";
+	private final String PROPERTY_URL = "instance.url";
+	private final String PROPERTY_ID = "instance.testid";
+	private final String PROPERTY_DELAY = "instance.delay";
+	
+	private boolean formLoaded = false;
 	private ParameterSet lastParameterSet;
 
 	public static void main(String[] args) {
@@ -89,6 +105,7 @@ public class Window {
 		scrollPane = new JScrollPane();
 		springLayout.putConstraint(SpringLayout.NORTH, scrollPane, 10, SpringLayout.NORTH, frmSpsaTracker.getContentPane());
 		springLayout.putConstraint(SpringLayout.WEST, scrollPane, 10, SpringLayout.WEST, frmSpsaTracker.getContentPane());
+		springLayout.putConstraint(SpringLayout.SOUTH, scrollPane, -42, SpringLayout.SOUTH, frmSpsaTracker.getContentPane());
 		springLayout.putConstraint(SpringLayout.EAST, scrollPane, -10, SpringLayout.EAST, frmSpsaTracker.getContentPane());
 		scrollPane.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_ALWAYS);
 		frmSpsaTracker.getContentPane().add(scrollPane);
@@ -99,11 +116,15 @@ public class Window {
 		table.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
 
 		comboBoxURL = new JComboBox(InstanceList.getInstanceList());
+		springLayout.putConstraint(SpringLayout.WEST, comboBoxURL, 93, SpringLayout.WEST, frmSpsaTracker.getContentPane());
 		comboBoxURL.addItemListener(new InstanceChangeListener());
-		springLayout.putConstraint(SpringLayout.NORTH, comboBoxURL, 10, SpringLayout.SOUTH, scrollPane);
 		frmSpsaTracker.getContentPane().add(comboBoxURL);
 
 		spinnerTestID = new JSpinner();
+		springLayout.putConstraint(SpringLayout.NORTH, comboBoxURL, 1, SpringLayout.NORTH, spinnerTestID);
+		springLayout.putConstraint(SpringLayout.NORTH, spinnerTestID, 507, SpringLayout.NORTH, frmSpsaTracker.getContentPane());
+		springLayout.putConstraint(SpringLayout.WEST, spinnerTestID, -73, SpringLayout.EAST, frmSpsaTracker.getContentPane());
+		springLayout.putConstraint(SpringLayout.SOUTH, spinnerTestID, -10, SpringLayout.SOUTH, frmSpsaTracker.getContentPane());
 		SpinnerModel idModel = new SpinnerNumberModel(0, 0, 100000, 1);
 		spinnerTestID.setModel(idModel);
 
@@ -111,28 +132,38 @@ public class Window {
 		spinnerTestID.setEditor(editor);
 		((DefaultFormatter) (editor.getTextField()).getFormatter()).setCommitsOnValidEdit(true);
 		spinnerTestID.addChangeListener(new IDChangeListener());
-
-		springLayout.putConstraint(SpringLayout.NORTH, spinnerTestID, 0, SpringLayout.NORTH, comboBoxURL);
-		springLayout.putConstraint(SpringLayout.WEST, spinnerTestID, -110, SpringLayout.EAST, frmSpsaTracker.getContentPane());
 		springLayout.putConstraint(SpringLayout.EAST, spinnerTestID, -10, SpringLayout.EAST, frmSpsaTracker.getContentPane());
 		frmSpsaTracker.getContentPane().add(spinnerTestID);
 
 		Label labelInstance = new Label("Instance URL");
-		springLayout.putConstraint(SpringLayout.SOUTH, spinnerTestID, 0, SpringLayout.SOUTH, labelInstance);
-		springLayout.putConstraint(SpringLayout.SOUTH, scrollPane, -10, SpringLayout.NORTH, labelInstance);
-		springLayout.putConstraint(SpringLayout.SOUTH, comboBoxURL, 0, SpringLayout.SOUTH, labelInstance);
-		springLayout.putConstraint(SpringLayout.EAST, comboBoxURL, 410, SpringLayout.EAST, labelInstance);
-		springLayout.putConstraint(SpringLayout.SOUTH, labelInstance, -10, SpringLayout.SOUTH, frmSpsaTracker.getContentPane());
-		springLayout.putConstraint(SpringLayout.WEST, comboBoxURL, 10, SpringLayout.EAST, labelInstance);
+		springLayout.putConstraint(SpringLayout.EAST, labelInstance, -6, SpringLayout.WEST, comboBoxURL);
 		springLayout.putConstraint(SpringLayout.WEST, labelInstance, 10, SpringLayout.WEST, frmSpsaTracker.getContentPane());
+		springLayout.putConstraint(SpringLayout.SOUTH, labelInstance, -10, SpringLayout.SOUTH, frmSpsaTracker.getContentPane());
 		frmSpsaTracker.getContentPane().add(labelInstance);
 
 		JLabel labelTestID = new JLabel("Test ID");
-		springLayout.putConstraint(SpringLayout.NORTH, labelTestID, 0, SpringLayout.NORTH, labelInstance);
-		springLayout.putConstraint(SpringLayout.WEST, labelTestID, -60, SpringLayout.WEST, spinnerTestID);
-		springLayout.putConstraint(SpringLayout.SOUTH, labelTestID, 0, SpringLayout.SOUTH, labelInstance);
-		springLayout.putConstraint(SpringLayout.EAST, labelTestID, -10, SpringLayout.WEST, spinnerTestID);
+		springLayout.putConstraint(SpringLayout.NORTH, labelTestID, -31, SpringLayout.SOUTH, frmSpsaTracker.getContentPane());
+		springLayout.putConstraint(SpringLayout.SOUTH, labelTestID, -10, SpringLayout.SOUTH, frmSpsaTracker.getContentPane());
+		springLayout.putConstraint(SpringLayout.EAST, labelTestID, -6, SpringLayout.WEST, spinnerTestID);
 		frmSpsaTracker.getContentPane().add(labelTestID);
+
+		JLabel labelDelay = new JLabel("Delay");
+		springLayout.putConstraint(SpringLayout.WEST, labelDelay, 467, SpringLayout.WEST, frmSpsaTracker.getContentPane());
+		springLayout.putConstraint(SpringLayout.EAST, comboBoxURL, -22, SpringLayout.WEST, labelDelay);
+		springLayout.putConstraint(SpringLayout.NORTH, labelDelay, 11, SpringLayout.SOUTH, scrollPane);
+		springLayout.putConstraint(SpringLayout.SOUTH, labelDelay, -10, SpringLayout.SOUTH, frmSpsaTracker.getContentPane());
+		frmSpsaTracker.getContentPane().add(labelDelay);
+
+		spinnerDelay = new JSpinner();
+		springLayout.putConstraint(SpringLayout.EAST, labelDelay, -6, SpringLayout.WEST, spinnerDelay);
+		springLayout.putConstraint(SpringLayout.NORTH, spinnerDelay, 11, SpringLayout.SOUTH, scrollPane);
+		springLayout.putConstraint(SpringLayout.SOUTH, spinnerDelay, -10, SpringLayout.SOUTH, frmSpsaTracker.getContentPane());
+		spinnerDelay.setModel(new SpinnerNumberModel(5, 1, 600, 1));
+		springLayout.putConstraint(SpringLayout.WEST, labelTestID, 18, SpringLayout.EAST, spinnerDelay);
+		springLayout.putConstraint(SpringLayout.WEST, spinnerDelay, 510, SpringLayout.WEST, frmSpsaTracker.getContentPane());
+		springLayout.putConstraint(SpringLayout.EAST, spinnerDelay, -137, SpringLayout.EAST, frmSpsaTracker.getContentPane());
+		spinnerDelay.addChangeListener(new DelayChangeListener());
+		frmSpsaTracker.getContentPane().add(spinnerDelay);
 
 		JMenu fileMenu = new JMenu("File");
 		JMenu actionMenu = new JMenu("Actions");
@@ -158,22 +189,24 @@ public class Window {
 		menuGraphButton.addActionListener(new GraphAction());
 		actionMenu.add(menuGraphButton);
 
-		tryLoadDefaults();
+		tryLoadLastCfg();
 
-		lastParameterSet = new ParameterSet(null, -1);
+		formLoaded = true;
 		reinitializeScraper();
 	}
 
-	private void tryLoadDefaults() {
+	private void tryLoadLastCfg() {
 		Properties prop = new Properties();
-		try (FileInputStream input = new FileInputStream("defaults.cfg")) {
+		try (FileInputStream input = new FileInputStream(CFG_FILE)) {
 			prop.load(input);
-			String url = prop.getProperty("instance.url");
-			String id = prop.getProperty("instance.testid");
+			String url = prop.getProperty(PROPERTY_URL);
+			String id = prop.getProperty(PROPERTY_ID);
+			String delay = prop.getProperty(PROPERTY_DELAY);
+			System.out.println("Loaded " + url + " " + id + " " + delay);
 
 			for (int i = 0; i < comboBoxURL.getItemCount(); i++) {
 				Object o = comboBoxURL.getItemAt(i);
-				if (o.toString().equals(url)) {
+				if (url.endsWith(o.toString())) {
 					comboBoxURL.setSelectedIndex(i);
 					break;
 				}
@@ -182,23 +215,69 @@ public class Window {
 			if (id != null) {
 				spinnerTestID.setValue(Integer.parseInt(id));
 			}
+			
+			if (delay != null) {
+				spinnerDelay.setValue(Integer.parseInt(delay));
+			}
 
 		} catch (NumberFormatException | IOException ex) {
 			ex.printStackTrace();
 		}
 	}
+	
+	private void trySaveLastCfg() {
+		Properties prop = new Properties();
+		
+		try (FileInputStream input = new FileInputStream(CFG_FILE)) {
+			prop.load(input);
+        } catch (IOException ex) {
+        	ex.printStackTrace();
+        }
+		
+		String url = getSelectedURL();
+		String id = Integer.toString(getSelectedTestID());
+		String delay = Integer.toString(getScrapeDelay());
+		
+		prop.setProperty(PROPERTY_URL, url);
+		prop.setProperty(PROPERTY_ID, id);
+		prop.setProperty(PROPERTY_DELAY, delay);
+		
+		System.out.println("Saving " + url + " " + id + " " + delay);
+		
+		try (FileOutputStream output = new FileOutputStream(CFG_FILE)) {
+            prop.store(output, "");
+        }
+		catch (IOException ex) {
+			ex.printStackTrace();
+		}
+	}
 
 	private void reinitializeScraper() {
+		lastParameterSet = new ParameterSet(null, -1);
+
 		String url = getSelectedURL();
 		int testID = getSelectedTestID();
+		int delay = getScrapeDelay();
 
+		scrapeTimer.stop();
+		scrapeTimer.setDelay(1000 * delay);
+		
 		scraper = new Scraper(url, testID);
 		System.out.println("Scraping " + url + "/" + testID + " ...");
 		scrapeTimer.restart();
+		
+		//	Skip modifying the cfg file until after all the components are good to go
+		//	(their ActionListeners can be called when initializing to their default values)
+		if (formLoaded)
+			trySaveLastCfg();
 	}
 
 	private int getSelectedTestID() {
 		return (int) spinnerTestID.getValue();
+	}
+
+	private int getScrapeDelay() {
+		return (int) spinnerDelay.getValue();
 	}
 
 	private String getSelectedURL() {
@@ -237,12 +316,21 @@ public class Window {
 		@Override
 		public void itemStateChanged(ItemEvent event) {
 			if (event.getStateChange() == ItemEvent.SELECTED) {
+				clearTable();
 				reinitializeScraper();
 			}
 		}
 	}
 
 	class IDChangeListener implements ChangeListener {
+		@Override
+		public void stateChanged(ChangeEvent e) {
+			clearTable();
+			reinitializeScraper();
+		}
+	}
+
+	class DelayChangeListener implements ChangeListener {
 		@Override
 		public void stateChanged(ChangeEvent e) {
 			reinitializeScraper();
@@ -291,7 +379,37 @@ public class Window {
 			resizeColumnWidth(table);
 		}
 
+		// Ignore duplicates
+		for (int i = 0; i < table.getRowCount(); i++) {
+			var iterStr = (String) table.getValueAt(i, 0);
+			if (paramSet.iteration() == Integer.parseInt(iterStr))
+				return;
+		}
+
+		boolean atBottom = isScrollBarAtBottom(scrollPane);
+
 		model.addRow(paramSet.toVector());
+
+		//	Keep the scroll bar scrolled to the bottom of the table if it was before the row was added
+		if (atBottom) {
+			SwingUtilities.invokeLater(() -> {
+				JScrollBar verticalBar = scrollPane.getVerticalScrollBar();
+				verticalBar.setValue(verticalBar.getMaximum());
+			});
+		}
+		
+		//	Sort rows by iteration #
+		//	(Necessary if a parameter set was scraped, then previous parameters were loaded from a file)
+		sorter = new TableRowSorter<>(table.getModel());
+		sorter.setComparator(0, Comparator.comparingInt(s -> Integer.parseInt(s.toString())));
+		table.setRowSorter(sorter);
+		sorter.sort();
+	}
+
+	private boolean isScrollBarAtBottom(JScrollPane scrollPane) {
+		JScrollBar verticalBar = scrollPane.getVerticalScrollBar();
+		int bottom = verticalBar.getValue() + verticalBar.getVisibleAmount();
+		return bottom >= verticalBar.getMaximum() - 1;
 	}
 
 	private void doGraph() {
@@ -308,6 +426,10 @@ public class Window {
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
+	}
+
+	private void clearTable() {
+		table.setModel(new DefaultTableModel());
 	}
 
 	private void resizeColumnWidth(JTable table) {

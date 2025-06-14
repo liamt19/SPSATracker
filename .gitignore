@@ -43,4 +43,4 @@ buildNumber.properties
 target/
 
 /saved
-defaults.cfg
+last.cfg

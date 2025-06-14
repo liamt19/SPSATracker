@@ -9,6 +9,9 @@ import argparse
 import os
 import sys
 
+RELOAD_FREQ_SECONDS = 4
+COLOR_PALETTE = 'tab20'
+
 def on_close(event):
     sys.exit(0)
 
@@ -40,6 +43,12 @@ def main():
     fig.canvas.mpl_connect('close_event', on_close)
     plt.ion()
 
+    instName = os.path.basename(os.path.normpath(args.test_folder))
+    link = f'{instName}/tune/{args.test_id}/'
+    fig.suptitle(link)
+
+    firstDraw = True
+
     while True:
         data = fetch_data(args.test_folder, args.test_id)
 
@@ -59,10 +68,20 @@ def main():
                 col_idx = data.columns.get_loc(col) - 1
                 delta_data[col] = (data[col] - start_vals[col_idx]) / step_vals[col_idx]
 
+        if not firstDraw:
+            xlim = ax.get_xlim()
+            ylim = ax.get_ylim()
+
         ax.clear()
+        
+        if not firstDraw:
+            ax.set_xlim(xlim)
+            ax.set_ylim(ylim)
+        
+        firstDraw = False
 
         num_params = len(start_vals)
-        cmap = plt.get_cmap('gist_rainbow')
+        cmap = plt.get_cmap(COLOR_PALETTE)
 
         plt.xlabel('Iteration')
         plt.ylabel('Delta as % of stepsize')
@@ -76,7 +95,7 @@ def main():
         num_cols = 1 + (num_params // 25)
         plt.legend(loc='center left', bbox_to_anchor=(1, 0.5), ncol=num_cols)
 
-        plt.pause(4)
+        plt.pause(RELOAD_FREQ_SECONDS)
 
 
 if __name__ == '__main__':
